@@ -10,8 +10,37 @@ import azure.functions as func
 import json
 import time
 import random
+import os
+import uuid
+from azure.storage.queue import QueueClient
+from azure.identity import DefaultAzureCredential
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+# Storage Queue configuration
+STORAGE_ACCOUNT_NAME = os.environ.get("AzureWebJobsStorage__accountName", "")
+QUEUE_NAME = "logging-test-queue"
+# User-assigned managed identity client ID (configured in Azure)
+MANAGED_IDENTITY_CLIENT_ID = os.environ.get("AzureWebJobsStorage__clientId", "")
+
+
+def get_queue_client() -> QueueClient:
+    """
+    Creates a QueueClient using user-assigned managed identity.
+    No storage keys required - uses the managed identity configured for the function app.
+    """
+    account_url = f"https://{STORAGE_ACCOUNT_NAME}.queue.core.windows.net"
+    
+    # Use user-assigned managed identity with specific client ID
+    if MANAGED_IDENTITY_CLIENT_ID:
+        credential = DefaultAzureCredential(
+            managed_identity_client_id=MANAGED_IDENTITY_CLIENT_ID
+        )
+    else:
+        # Fallback to default (for local development)
+        credential = DefaultAzureCredential()
+    
+    return QueueClient(account_url, queue_name=QUEUE_NAME, credential=credential)
 
 
 @app.route(route="httpget", methods=["GET"])
@@ -223,3 +252,217 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
         json.dumps({"status": "healthy", "timestamp": time.time()}),
         mimetype="application/json"
     )
+
+
+# ============================================================================
+# Queue Operations Endpoint - Demonstrates Azure Storage Queue with Managed Identity
+# ============================================================================
+
+@app.route(route="queuemessage", methods=["POST"])
+def queue_message(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Pushes messages to Azure Storage Queue using managed identity.
+    
+    This endpoint demonstrates:
+    1. Azure Storage Queue operations with managed identity (no keys)
+    2. Logging patterns for queue operations
+    3. How sampling affects these logs in Application Insights
+    
+    Expected JSON body:
+    {
+        "message": "string",           // Message content (optional, default: auto-generated)
+        "count": int,                  // Number of messages to send (optional, default: 1, max: 100)
+        "includeMetadata": bool        // Include extra metadata in message (optional, default: true)
+    }
+    
+    Example:
+        curl -X POST https://<func-url>/api/queuemessage \
+             -H "Content-Type: application/json" \
+             -d '{"message": "Test message", "count": 5}'
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    
+    logging.info(f"[{correlation_id}] Queue message endpoint triggered")
+    
+    try:
+        # Parse request body
+        try:
+            req_body = req.get_json()
+        except ValueError:
+            req_body = {}
+        
+        message_content = req_body.get("message", f"Auto-generated message at {time.time()}")
+        count = min(int(req_body.get("count", 1)), 100)  # Cap at 100
+        include_metadata = req_body.get("includeMetadata", True)
+        
+        logging.info(f"[{correlation_id}] Preparing to send {count} message(s) to queue '{QUEUE_NAME}'")
+        logging.debug(f"[{correlation_id}] Storage account: {STORAGE_ACCOUNT_NAME}")
+        
+        # Get queue client with managed identity
+        queue_client = get_queue_client()
+        
+        # Create queue if it doesn't exist
+        try:
+            queue_client.create_queue()
+            logging.info(f"[{correlation_id}] Queue '{QUEUE_NAME}' created or already exists")
+        except Exception as e:
+            # Queue might already exist, which is fine
+            logging.debug(f"[{correlation_id}] Queue creation note: {str(e)}")
+        
+        # Send messages
+        sent_messages = []
+        start_time = time.time()
+        
+        for i in range(count):
+            # Build message payload
+            if include_metadata:
+                payload = {
+                    "id": str(uuid.uuid4()),
+                    "content": message_content,
+                    "sequence": i + 1,
+                    "totalCount": count,
+                    "correlationId": correlation_id,
+                    "timestamp": time.time(),
+                    "source": "logging-optimization-demo"
+                }
+            else:
+                payload = {"content": message_content, "sequence": i + 1}
+            
+            message_json = json.dumps(payload)
+            
+            # Send message to queue
+            logging.debug(f"[{correlation_id}] Sending message {i+1}/{count}")
+            response = queue_client.send_message(message_json)
+            
+            sent_messages.append({
+                "messageId": response.id,
+                "sequence": i + 1,
+                "insertedOn": str(response.inserted_on)
+            })
+            
+            # Log at different intervals for sampling demonstration
+            if (i + 1) % 10 == 0:
+                logging.info(f"[{correlation_id}] Progress: {i+1}/{count} messages sent")
+        
+        elapsed_time = time.time() - start_time
+        
+        logging.info(f"[{correlation_id}] Successfully sent {count} messages in {elapsed_time:.3f}s")
+        
+        # Return summary
+        return func.HttpResponse(
+            json.dumps({
+                "success": True,
+                "correlationId": correlation_id,
+                "queueName": QUEUE_NAME,
+                "messagesSent": count,
+                "elapsedTimeMs": round(elapsed_time * 1000, 2),
+                "averageTimePerMessageMs": round((elapsed_time / count) * 1000, 2) if count > 0 else 0,
+                "messages": sent_messages[:10],  # Return first 10 for brevity
+                "samplingNote": "Check Application Insights: traces | where message contains '" + correlation_id + "' | count"
+            }, indent=2),
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.error(f"[{correlation_id}] Error sending queue message: {str(e)}")
+        logging.exception(f"[{correlation_id}] Full exception details")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "success": False,
+                "correlationId": correlation_id,
+                "error": str(e),
+                "errorType": type(e).__name__
+            }, indent=2),
+            status_code=500,
+            mimetype="application/json"
+        )
+
+
+@app.route(route="queuestatus", methods=["GET"])
+def queue_status(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Gets the status of the logging test queue.
+    
+    Returns queue properties including approximate message count.
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    
+    logging.info(f"[{correlation_id}] Queue status check requested")
+    
+    try:
+        queue_client = get_queue_client()
+        
+        # Get queue properties
+        properties = queue_client.get_queue_properties()
+        
+        logging.info(f"[{correlation_id}] Queue status retrieved successfully")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "success": True,
+                "correlationId": correlation_id,
+                "queueName": QUEUE_NAME,
+                "storageAccount": STORAGE_ACCOUNT_NAME,
+                "approximateMessageCount": properties.approximate_message_count,
+                "metadata": dict(properties.metadata) if properties.metadata else {}
+            }, indent=2),
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.error(f"[{correlation_id}] Error getting queue status: {str(e)}")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "success": False,
+                "correlationId": correlation_id,
+                "error": str(e),
+                "note": "Queue may not exist yet. Send a message first using POST /api/queuemessage"
+            }, indent=2),
+            status_code=500,
+            mimetype="application/json"
+        )
+
+
+@app.route(route="queueclear", methods=["DELETE"])
+def queue_clear(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Clears all messages from the queue.
+    
+    Useful for resetting the queue during testing.
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    
+    logging.warning(f"[{correlation_id}] Queue clear requested - this will delete all messages!")
+    
+    try:
+        queue_client = get_queue_client()
+        
+        # Clear all messages
+        queue_client.clear_messages()
+        
+        logging.info(f"[{correlation_id}] Queue cleared successfully")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "success": True,
+                "correlationId": correlation_id,
+                "queueName": QUEUE_NAME,
+                "message": "All messages cleared from queue"
+            }, indent=2),
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        logging.error(f"[{correlation_id}] Error clearing queue: {str(e)}")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "success": False,
+                "correlationId": correlation_id,
+                "error": str(e)
+            }, indent=2),
+            status_code=500,
+            mimetype="application/json"
+        )

@@ -6,18 +6,25 @@
       "default": "Warning",
       "Host.Results": "Information",
       "Host.Aggregator": "Trace",
-      "Function": "Information"
+      "Function": "Information",
+      "Function.queue_message": "Information",
+      "Function.queue_message.User": "Debug",
+      "Azure.Core": "Warning",
+      "Azure.Storage": "Warning"
     },
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
         "maxTelemetryItemsPerSecond": 5,
-        "excludedTypes": "Request;Exception"
+        "excludedTypes": "Request;Exception",
+        "includedTypes": ""
       },
       "enableDependencyTracking": true,
       "dependencyTrackingOptions": {
         "enableSqlCommandTextInstrumentation": false
-      }
+      },
+      "enableLiveMetrics": true,
+      "enablePerformanceCountersCollection": true
     }
   },
   "extensionBundle": {

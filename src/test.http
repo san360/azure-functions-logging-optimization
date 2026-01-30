@@ -49,6 +49,82 @@ GET http://localhost:7071/api/performancetest
 ### Performance Test - high frequency logging
 GET http://localhost:7071/api/performancetest?iterations=1000&logfrequency=10
 
+### =====================================================
+### Queue Operations (Azure Storage Queue with Managed Identity)
+### =====================================================
+
+### Send single message to queue
+POST http://localhost:7071/api/queuemessage
+Content-Type: application/json
+
+{
+    "message": "Hello from logging demo!",
+    "count": 1,
+    "includeMetadata": true
+}
+
+### Send multiple messages for sampling test (5 messages)
+POST http://localhost:7071/api/queuemessage
+Content-Type: application/json
+
+{
+    "message": "Sampling test message",
+    "count": 5,
+    "includeMetadata": true
+}
+
+### Send 50 messages - good for observing sampling behavior
+POST http://localhost:7071/api/queuemessage
+Content-Type: application/json
+
+{
+    "message": "Bulk test message for sampling observation",
+    "count": 50,
+    "includeMetadata": true
+}
+
+### Send 100 messages - maximum for single request
+POST http://localhost:7071/api/queuemessage
+Content-Type: application/json
+
+{
+    "message": "Load test message",
+    "count": 100,
+    "includeMetadata": false
+}
+
+### Check queue status
+GET http://localhost:7071/api/queuestatus
+
+### Clear all messages from queue
+DELETE http://localhost:7071/api/queueclear
+
+### =====================================================
+### Azure Deployed Endpoints
+### Replace <func-name> with your function app name
+### =====================================================
+
+@baseUrl = https://func-funclogging.azurewebsites.net/api
+
+### Health check (deployed)
+GET {{baseUrl}}/healthcheck
+
+### Send messages to queue (deployed)
+POST {{baseUrl}}/queuemessage
+Content-Type: application/json
+
+{
+    "message": "Test from deployed function",
+    "count": 10,
+    "includeMetadata": true
+}
+
+### Check queue status (deployed)
+GET {{baseUrl}}/queuestatus
+
+### Sampling test (deployed)
+GET {{baseUrl}}/samplingtest?count=100
+
 ### Performance Test - low frequency logging
 GET http://localhost:7071/api/performancetest?iterations=1000&logfrequency=100
 
