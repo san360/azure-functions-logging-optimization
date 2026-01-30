@@ -1,119 +1,151 @@
 # Azure Functions Logging Optimization with Application Insights
 
-This project demonstrates how to configure, optimize, and disable logging/traces in Azure Functions with Python, Application Insights, and Log Analytics Workspace.
+This project demonstrates how to configure, optimize, and control logging/traces in Azure Functions with Python, Application Insights, and Log Analytics Workspace.
 
 ## 🎯 Overview
 
 Azure Functions integrates with Application Insights for monitoring, which can generate high volumes of telemetry data. This project provides:
 
 - **Configurable logging levels** for different components
-- **Sampling configuration** to reduce data volume
+- **Sampling configuration** to reduce data volume and costs
+- **Azure Storage Queue integration** with managed identity
 - **Infrastructure as Code** using Azure Developer CLI (azd) and Bicep
-- **Test endpoints** to observe logging behavior
-- **Flex Consumption plan** with managed identity (no storage keys)
-- **Documentation** on optimization strategies
+- **Test endpoints** to observe logging and sampling behavior
+- **Flex Consumption plan** with user-assigned managed identity (no storage keys)
 
 ## 🏗️ Architecture
 
-This project uses **Azure Functions Flex Consumption plan** which provides:
-- Serverless scaling with pay-per-use billing
-- **User-assigned managed identity** for secure storage access (no shared keys)
-- Blob-based deployment packages
-- Better cold start performance
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Azure Resources                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │   Function App   │───▶│  Storage Queue   │                   │
+│  │ (Flex Consumption)│    │  (Managed ID)    │                   │
+│  └────────┬─────────┘    └──────────────────┘                   │
+│           │                                                      │
+│           │ Telemetry                                            │
+│           ▼                                                      │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │   Application    │───▶│   Log Analytics  │                   │
+│  │    Insights      │    │    Workspace     │                   │
+│  └──────────────────┘    └──────────────────┘                   │
+│                                                                  │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │  User-Assigned   │    │  Storage Account │                   │
+│  │ Managed Identity │───▶│ (No Shared Keys) │                   │
+│  └──────────────────┘    └──────────────────┘                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- **Flex Consumption Plan** - Serverless scaling with pay-per-use billing
+- **User-Assigned Managed Identity** - Secure storage access without keys
+- **No Shared Key Access** - Storage account configured with `allowSharedKeyAccess: false`
+- **Blob-Based Deployment** - Function packages stored in blob container
 
 ## 📋 Prerequisites
 
 - [Python 3.11+](https://www.python.org/downloads/)
-- [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
+- [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
 - [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd)
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (optional)
 - [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) for local development
 
 ## 🚀 Quick Start
 
-### Local Development
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/san360/azure-functions-logging-optimization.git
-   cd azure-functions-logging-optimization
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Linux/macOS
-   # or
-   .venv\Scripts\activate     # Windows
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r src/requirements.txt
-   ```
-
-4. **Start Azurite** (in a separate terminal)
-   ```bash
-   azurite --silent --location .azurite --debug .azurite/debug.log
-   ```
-
-5. **Run locally**
-   ```bash
-   cd src
-   func start
-   ```
-
 ### Deploy to Azure
 
-1. **Login to Azure**
-   ```bash
-   azd auth login
-   ```
+```bash
+# Login to Azure
+azd auth login
 
-2. **Initialize environment**
-   ```bash
-   azd init -e dev
-   ```
+# Deploy infrastructure and code
+azd up
+```
 
-3. **Deploy**
-   ```bash
-   azd up
-   ```
+### Local Development
+
+```bash
+# Clone repository
+git clone https://github.com/san360/azure-functions-logging-optimization.git
+cd azure-functions-logging-optimization
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+
+# Install dependencies
+pip install -r src/requirements.txt
+
+# Start Azurite (separate terminal)
+azurite --silent --location .azurite
+
+# Run locally
+cd src && func start
+```
 
 ## 📁 Project Structure
 
 ```
-├── azure.yaml              # Azure Developer CLI configuration
-├── infra/                  # Infrastructure as Code (Bicep)
-│   ├── main.bicep         # Main deployment template
+├── azure.yaml                    # Azure Developer CLI configuration
+├── docs/
+│   └── TESTING.md               # Complete testing guide with curl & KQL
+├── infra/                        # Infrastructure as Code (Bicep)
+│   ├── main.bicep               # Main deployment orchestration
 │   ├── main.parameters.json
 │   └── core/
 │       ├── host/
-│       │   ├── app-service-plan.bicep    # Flex Consumption plan
+│       │   ├── app-service-plan.bicep    # Flex Consumption (FC1)
 │       │   └── function-app.bicep        # Function with managed identity
 │       ├── identity/
 │       │   ├── user-assigned-identity.bicep
-│       │   └── role-assignments.bicep    # RBAC for storage/monitoring
+│       │   └── role-assignments.bicep    # RBAC permissions
 │       ├── monitor/
 │       │   ├── application-insights.bicep
 │       │   └── log-analytics.bicep
 │       └── storage/
 │           └── storage-account.bicep     # No shared key access
-├── src/                    # Function App source code
-│   ├── function_app.py    # Main functions
-│   ├── host.json          # Logging configuration
-│   ├── local.settings.json
-│   ├── requirements.txt
-│   ├── logging_configurations.py  # Example configurations
-│   └── test.http          # Test requests
+├── src/                          # Function App source code
+│   ├── function_app.py          # All function endpoints
+│   ├── host.json                # Logging & sampling configuration
+│   ├── requirements.txt         # Python dependencies
+│   └── test.http                # REST Client test requests
 └── README.md
+```
+
+## 🔌 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/healthcheck` | GET | Health check with minimal logging |
+| `/api/httpget` | GET | Basic endpoint with configurable log level |
+| `/api/httppost` | POST | Generate multiple logs, simulate errors |
+| `/api/loggingdemo` | GET | Demonstrates all log levels |
+| `/api/performancetest` | GET | Test performance impact of logging |
+| `/api/samplingtest` | GET | Generate logs to observe sampling effect |
+| `/api/queuemessage` | POST | Push messages to Azure Storage Queue |
+| `/api/queuestatus` | GET | Get queue status and message count |
+| `/api/queueclear` | DELETE | Clear all messages from queue |
+
+### Live Endpoint Examples
+
+```bash
+# Health check
+curl https://func-funclogging.azurewebsites.net/api/healthcheck
+
+# Send messages to queue
+curl -X POST "https://func-funclogging.azurewebsites.net/api/queuemessage" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Test", "count": 10}'
+
+# Check queue status
+curl https://func-funclogging.azurewebsites.net/api/queuestatus
 ```
 
 ## 🔧 Logging Configuration
 
-### host.json Configuration
-
-The `host.json` file controls logging behavior:
+### host.json
 
 ```json
 {
@@ -123,7 +155,10 @@ The `host.json` file controls logging behavior:
       "default": "Warning",
       "Host.Results": "Information",
       "Host.Aggregator": "Trace",
-      "Function": "Information"
+      "Function": "Information",
+      "Function.queue_message": "Information",
+      "Azure.Core": "Warning",
+      "Azure.Storage": "Warning"
     },
     "applicationInsights": {
       "samplingSettings": {
@@ -139,9 +174,9 @@ The `host.json` file controls logging behavior:
 
 ### Log Levels
 
-| Level | Code | Description |
-|-------|------|-------------|
-| Trace | 0 | Most detailed messages (may contain sensitive data) |
+| Level | Value | Description |
+|-------|-------|-------------|
+| Trace | 0 | Most detailed (may contain sensitive data) |
 | Debug | 1 | Debugging information |
 | Information | 2 | General operational flow |
 | Warning | 3 | Abnormal or unexpected events |
@@ -149,27 +184,54 @@ The `host.json` file controls logging behavior:
 | Critical | 5 | System crash or catastrophic failure |
 | None | 6 | Disables logging for the category |
 
-### Log Categories
+### Sampling Configuration
 
-| Category | Description |
-|----------|-------------|
-| `default` | Catch-all for unspecified categories |
-| `Host.Results` | Function execution results (requests table) |
-| `Host.Aggregator` | Aggregated metrics (customMetrics table) |
-| `Function` | All function logs |
-| `Function.<Name>` | Specific function logs |
-| `Function.<Name>.User` | User-generated logs from a function |
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `isEnabled` | Enable/disable sampling | `true` |
+| `maxTelemetryItemsPerSecond` | Max traces per second | `5` |
+| `excludedTypes` | Types to never sample | `Request;Exception` |
+| `includedTypes` | Types to always sample | `""` |
+
+## 📊 Observing Sampling in Application Insights
+
+### Quick KQL Queries
+
+```kusto
+// View recent traces
+traces
+| where timestamp > ago(30m)
+| project timestamp, severityLevel, message
+| order by timestamp desc
+
+// Count traces by correlation ID (from queue response)
+traces
+| where message contains "YOUR_CORRELATION_ID"
+| count
+
+// Check sampling effect
+traces
+| where message contains "Sampling test entry"
+| count
+```
+
+### Understanding Sampling
+
+With `maxTelemetryItemsPerSecond: 5`:
+- Sending 100 messages generates ~100+ trace logs
+- Only ~5 traces per second are retained
+- Requests and Exceptions are **never** sampled (excluded)
+
+**For complete testing documentation, see [docs/TESTING.md](docs/TESTING.md)**
 
 ## ⚙️ Configuration Scenarios
 
-### 1. Minimal Logging (Cost Optimized)
+### 1. Cost Optimized (Production)
 
 ```json
 {
   "logging": {
-    "logLevel": {
-      "default": "Error"
-    },
+    "logLevel": { "default": "Error" },
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
@@ -181,178 +243,65 @@ The `host.json` file controls logging behavior:
 }
 ```
 
-**Environment variables:**
-```bash
-azd env set DEFAULT_LOG_LEVEL Error
-azd env set ENABLE_SAMPLING true
-azd env set MAX_TELEMETRY_ITEMS_PER_SECOND 1
-azd env set ENABLE_DEPENDENCY_TRACKING false
-```
-
-### 2. Balanced Production Logging
+### 2. Full Debugging
 
 ```json
 {
   "logging": {
-    "logLevel": {
-      "default": "Warning",
-      "Host.Results": "Information",
-      "Function": "Information"
-    },
+    "logLevel": { "default": "Debug", "Function": "Trace" },
     "applicationInsights": {
-      "samplingSettings": {
-        "isEnabled": true,
-        "maxTelemetryItemsPerSecond": 5,
-        "excludedTypes": "Request;Exception"
-      }
+      "samplingSettings": { "isEnabled": false }
     }
   }
 }
 ```
 
-### 3. Full Debugging
-
-```json
-{
-  "logging": {
-    "logLevel": {
-      "default": "Debug",
-      "Function": "Trace"
-    },
-    "applicationInsights": {
-      "samplingSettings": {
-        "isEnabled": false
-      }
-    }
-  }
-}
-```
-
-### 4. Disable Application Insights
-
-Remove or clear the connection string:
-```bash
-az functionapp config appsettings delete \
-  --name <FUNCTION_APP_NAME> \
-  --resource-group <RESOURCE_GROUP> \
-  --setting-names APPLICATIONINSIGHTS_CONNECTION_STRING
-```
-
-## 🔄 Runtime Configuration Override
-
-Override host.json settings via app settings without redeployment:
+### 3. Runtime Override (No Redeployment)
 
 ```bash
-# Set log level via Azure CLI
+# Override log level via app settings
 az functionapp config appsettings set \
-  --name <FUNCTION_APP_NAME> \
-  --resource-group <RESOURCE_GROUP> \
-  --settings "AzureFunctionsJobHost__logging__logLevel__default=Warning"
-
-# Enable scale controller logs
-az functionapp config appsettings set \
-  --name <FUNCTION_APP_NAME> \
-  --resource-group <RESOURCE_GROUP> \
-  --settings "SCALE_CONTROLLER_LOGGING_ENABLED=AppInsights:Verbose"
+  --name func-funclogging \
+  --resource-group rg-funclogging \
+  --settings "AzureFunctionsJobHost__logging__logLevel__default=Debug"
 ```
 
-## 🧪 Testing the Configuration
+## 🔐 Security Features
 
-### Test Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/httpget` | Basic endpoint with configurable log level |
-| `POST /api/httppost` | Generate multiple logs, simulate errors |
-| `GET /api/loggingdemo` | Demonstrates all log levels |
-| `GET /api/performancetest` | Test performance impact of logging |
-| `GET /api/samplingtest` | Generate logs to observe sampling |
-| `GET /api/healthcheck` | Minimal logging health check |
-
-### Using test.http
-
-With VS Code REST Client extension:
-1. Open `src/test.http`
-2. Click "Send Request" above each request
-
-### Using curl
-
-```bash
-# Basic GET
-curl http://localhost:7071/api/httpget?name=Test
-
-# Logging demo
-curl http://localhost:7071/api/loggingdemo
-
-# Sampling test
-curl "http://localhost:7071/api/samplingtest?count=100"
-```
-
-## 📊 Viewing Logs in Application Insights
-
-### Kusto Queries
-
-**View all traces:**
-```kusto
-traces
-| where timestamp > ago(1h)
-| order by timestamp desc
-| take 100
-```
-
-**View traces by severity:**
-```kusto
-traces
-| where timestamp > ago(1h)
-| summarize count() by severityLevel
-```
-
-**Check sampling effectiveness:**
-```kusto
-traces
-| where message contains "Sampling test entry"
-| count
-```
-
-**View function executions:**
-```kusto
-requests
-| where timestamp > ago(1h)
-| summarize count(), avg(duration) by name
-```
+- **No Storage Keys** - `allowSharedKeyAccess: false` on storage account
+- **User-Assigned Managed Identity** - For all Azure resource access
+- **RBAC Permissions**:
+  - Storage Blob Data Owner
+  - Storage Blob Data Contributor  
+  - Storage Queue Data Contributor
+  - Storage Table Data Contributor
+  - Monitoring Metrics Publisher
 
 ## 💰 Cost Optimization Tips
 
-1. **Enable Sampling**: Reduces data volume significantly
-   ```json
-   "samplingSettings": {
-     "isEnabled": true,
-     "maxTelemetryItemsPerSecond": 5
-   }
-   ```
+1. **Enable Sampling** - Reduces Application Insights data by 80%+
+2. **Increase Log Level** - Use `Warning` or `Error` in production
+3. **Disable Dependency Tracking** - If not analyzing external calls
+4. **Filter Azure SDK Logs** - Set `Azure.Core` and `Azure.Storage` to `Warning`
+5. **Set Daily Cap** - Configure in Log Analytics workspace
 
-2. **Increase Log Level**: Use `Warning` or `Error` in production
-   ```json
-   "logLevel": {
-     "default": "Warning"
-   }
-   ```
+## 🧹 Cleanup
 
-3. **Disable Dependency Tracking**: If not needed
-   ```json
-   "enableDependencyTracking": false
-   ```
-
-4. **Exclude High-Volume Types from Sampling**:
-   ```json
-   "excludedTypes": "Request;Exception"
-   ```
-
-5. **Set Daily Cap in Log Analytics**: Prevent unexpected costs
+```bash
+# Delete all Azure resources
+azd down --force --purge
+```
 
 ## 🔗 Resources
 
 - [Configure monitoring for Azure Functions](https://learn.microsoft.com/azure/azure-functions/configure-monitoring)
+- [Application Insights sampling](https://learn.microsoft.com/azure/azure-monitor/app/sampling)
+- [Azure Functions Flex Consumption plan](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan)
+- [Managed identities for Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-identity-access-azure-sql-with-managed-identity)
+
+## 📄 License
+
+MIT
 - [Application Insights sampling](https://learn.microsoft.com/azure/azure-monitor/app/sampling)
 - [host.json reference](https://learn.microsoft.com/azure/azure-functions/functions-host-json)
 - [Azure Functions Python developer guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-python)
