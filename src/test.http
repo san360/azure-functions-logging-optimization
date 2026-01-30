@@ -1,0 +1,59 @@
+### GET http://localhost:7071/api/httpget
+GET http://localhost:7071/api/httpget?name=TestUser
+
+### GET with different log levels
+GET http://localhost:7071/api/httpget?name=DebugTest&loglevel=debug
+
+### GET with warning level
+GET http://localhost:7071/api/httpget?name=WarningTest&loglevel=warning
+
+### GET with error level
+GET http://localhost:7071/api/httpget?name=ErrorTest&loglevel=error
+
+### POST with JSON body
+POST http://localhost:7071/api/httppost
+Content-Type: application/json
+
+{
+    "name": "TestUser",
+    "generateLogs": 5,
+    "simulateError": false
+}
+
+### POST to generate many logs
+POST http://localhost:7071/api/httppost
+Content-Type: application/json
+
+{
+    "name": "LoadTest",
+    "generateLogs": 50,
+    "simulateError": false
+}
+
+### POST to simulate error
+POST http://localhost:7071/api/httppost
+Content-Type: application/json
+
+{
+    "name": "ErrorTest",
+    "generateLogs": 1,
+    "simulateError": true
+}
+
+### Logging Demo - Shows all log levels
+GET http://localhost:7071/api/loggingdemo
+
+### Performance Test - default
+GET http://localhost:7071/api/performancetest
+
+### Performance Test - high frequency logging
+GET http://localhost:7071/api/performancetest?iterations=1000&logfrequency=10
+
+### Performance Test - low frequency logging
+GET http://localhost:7071/api/performancetest?iterations=1000&logfrequency=100
+
+### Sampling Test - generate logs to observe sampling behavior
+GET http://localhost:7071/api/samplingtest?count=100
+
+### Health Check
+GET http://localhost:7071/api/healthcheck

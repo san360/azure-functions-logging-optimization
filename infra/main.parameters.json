@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    },
+    "defaultLogLevel": {
+      "value": "${DEFAULT_LOG_LEVEL=Warning}"
+    },
+    "hostResultsLogLevel": {
+      "value": "${HOST_RESULTS_LOG_LEVEL=Information}"
+    },
+    "hostAggregatorLogLevel": {
+      "value": "${HOST_AGGREGATOR_LOG_LEVEL=Trace}"
+    },
+    "functionLogLevel": {
+      "value": "${FUNCTION_LOG_LEVEL=Information}"
+    },
+    "enableSampling": {
+      "value": "${ENABLE_SAMPLING=true}"
+    },
+    "maxTelemetryItemsPerSecond": {
+      "value": "${MAX_TELEMETRY_ITEMS_PER_SECOND=5}"
+    },
+    "samplingExcludedTypes": {
+      "value": "${SAMPLING_EXCLUDED_TYPES=Request;Exception}"
+    },
+    "enableDependencyTracking": {
+      "value": "${ENABLE_DEPENDENCY_TRACKING=true}"
+    },
+    "enableScaleControllerLogs": {
+      "value": "${ENABLE_SCALE_CONTROLLER_LOGS=false}"
+    }
+  }
+}

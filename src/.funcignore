@@ -1,0 +1,12 @@
+.venv/
+.vscode/
+.azure/
+local.settings.json
+__pycache__/
+.python_packages/
+.funcignore
+getting_started.md
+test/
+*.pyc
+*.pyo
+*.pyd

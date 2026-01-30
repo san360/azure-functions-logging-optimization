@@ -1,0 +1,12 @@
+# Azure Developer CLI project configuration
+# Learn more: https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema
+name: azure-functions-logging-optimization
+
+metadata:
+  template: azure-functions-logging-optimization@0.1.0
+
+services:
+  api:
+    project: ./src
+    language: python
+    host: function
