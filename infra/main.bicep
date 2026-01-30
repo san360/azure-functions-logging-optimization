@@ -28,6 +28,9 @@ param logAnalyticsName string = ''
 @description('Name of the Application Insights. Defaults to appi-{environmentName}')
 param applicationInsightsName string = ''
 
+@description('Name of the User-Assigned Managed Identity. Defaults to uai-{environmentName}')
+param userAssignedIdentityName string = ''
+
 // Logging Configuration Parameters
 @description('Default log level for the function app')
 @allowed(['Trace', 'Debug', 'Information', 'Warning', 'Error', 'Critical', 'None'])
@@ -60,6 +63,14 @@ param enableDependencyTracking bool = true
 @description('Enable scale controller logs')
 param enableScaleControllerLogs bool = false
 
+// Flex Consumption parameters
+@description('Maximum instance count for Flex Consumption plan')
+param maximumInstanceCount int = 100
+
+@description('Instance memory in MB for Flex Consumption plan')
+@allowed([2048, 4096])
+param instanceMemoryMB int = 2048
+
 // Abbreviations for resource naming
 var abbrs = {
   resourceGroup: 'rg-'
@@ -68,6 +79,7 @@ var abbrs = {
   functionApp: 'func-'
   logAnalyticsWorkspace: 'law-'
   applicationInsights: 'appi-'
+  userAssignedIdentity: 'uai-'
 }
 
 // Unique token for naming
@@ -80,6 +92,10 @@ var _appServicePlanName = !empty(appServicePlanName) ? appServicePlanName : '${a
 var _functionAppName = !empty(functionAppName) ? functionAppName : '${abbrs.functionApp}${environmentName}'
 var _logAnalyticsName = !empty(logAnalyticsName) ? logAnalyticsName : '${abbrs.logAnalyticsWorkspace}${environmentName}'
 var _applicationInsightsName = !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.applicationInsights}${environmentName}'
+var _userAssignedIdentityName = !empty(userAssignedIdentityName) ? userAssignedIdentityName : '${abbrs.userAssignedIdentity}${environmentName}'
+
+// Deployment container name for Flex Consumption
+var deploymentContainerName = 'app-package-${take(_functionAppName, 32)}-${take(uniqueToken, 7)}'
 
 // Tags for all resources
 var tags = {
@@ -117,7 +133,7 @@ module applicationInsights './core/monitor/application-insights.bicep' = {
   }
 }
 
-// Storage Account
+// Storage Account with deployment container
 module storageAccount './core/storage/storage-account.bicep' = {
   name: 'storageAccount'
   scope: rg
@@ -125,10 +141,39 @@ module storageAccount './core/storage/storage-account.bicep' = {
     name: _storageAccountName
     location: location
     tags: tags
+    allowSharedKeyAccess: false
+    deploymentContainerName: deploymentContainerName
   }
 }
 
-// App Service Plan (Consumption)
+// User-Assigned Managed Identity
+module userAssignedIdentity './core/identity/user-assigned-identity.bicep' = {
+  name: 'userAssignedIdentity'
+  scope: rg
+  params: {
+    name: _userAssignedIdentityName
+    location: location
+    tags: tags
+  }
+}
+
+// Role Assignments for Managed Identity
+module roleAssignments './core/identity/role-assignments.bicep' = {
+  name: 'roleAssignments'
+  scope: rg
+  params: {
+    storageAccountId: storageAccount.outputs.id
+    applicationInsightsId: applicationInsights.outputs.id
+    principalId: userAssignedIdentity.outputs.principalId
+  }
+  dependsOn: [
+    storageAccount
+    applicationInsights
+    userAssignedIdentity
+  ]
+}
+
+// App Service Plan (Flex Consumption)
 module appServicePlan './core/host/app-service-plan.bicep' = {
   name: 'appServicePlan'
   scope: rg
@@ -137,13 +182,13 @@ module appServicePlan './core/host/app-service-plan.bicep' = {
     location: location
     tags: tags
     sku: {
-      name: 'Y1'
-      tier: 'Dynamic'
+      name: 'FC1'
+      tier: 'FlexConsumption'
     }
   }
 }
 
-// Function App with configurable logging
+// Function App with configurable logging (Flex Consumption)
 module functionApp './core/host/function-app.bicep' = {
   name: 'functionApp'
   scope: rg
@@ -153,7 +198,10 @@ module functionApp './core/host/function-app.bicep' = {
     tags: union(tags, { 'azd-service-name': 'api' })
     appServicePlanId: appServicePlan.outputs.id
     storageAccountName: storageAccount.outputs.name
-    applicationInsightsConnectionString: applicationInsights.outputs.connectionString
+    storageBlobEndpoint: storageAccount.outputs.blobEndpoint
+    deploymentContainerName: deploymentContainerName
+    userAssignedIdentityId: userAssignedIdentity.outputs.id
+    userAssignedIdentityClientId: userAssignedIdentity.outputs.clientId
     applicationInsightsInstrumentationKey: applicationInsights.outputs.instrumentationKey
     // Logging configuration
     defaultLogLevel: defaultLogLevel
@@ -165,7 +213,13 @@ module functionApp './core/host/function-app.bicep' = {
     samplingExcludedTypes: samplingExcludedTypes
     enableDependencyTracking: enableDependencyTracking
     enableScaleControllerLogs: enableScaleControllerLogs
+    // Flex Consumption configuration
+    maximumInstanceCount: maximumInstanceCount
+    instanceMemoryMB: instanceMemoryMB
   }
+  dependsOn: [
+    roleAssignments
+  ]
 }
 
 // Outputs
@@ -177,3 +231,4 @@ output AZURE_FUNCTION_APP_URL string = functionApp.outputs.uri
 output AZURE_APPLICATION_INSIGHTS_NAME string = applicationInsights.outputs.name
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = logAnalytics.outputs.name
 output AZURE_STORAGE_ACCOUNT_NAME string = storageAccount.outputs.name
+output AZURE_USER_ASSIGNED_IDENTITY_NAME string = userAssignedIdentity.outputs.name

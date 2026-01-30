@@ -13,8 +13,17 @@ param appServicePlanId string
 @description('Storage Account Name')
 param storageAccountName string
 
-@description('Application Insights Connection String')
-param applicationInsightsConnectionString string
+@description('Storage Account Blob Endpoint')
+param storageBlobEndpoint string
+
+@description('Deployment Container Name for function app packages')
+param deploymentContainerName string
+
+@description('User-Assigned Managed Identity Resource ID')
+param userAssignedIdentityId string
+
+@description('User-Assigned Managed Identity Client ID')
+param userAssignedIdentityClientId string
 
 @description('Application Insights Instrumentation Key')
 param applicationInsightsInstrumentationKey string
@@ -54,103 +63,79 @@ param enableScaleControllerLogs bool = false
 @description('Python version')
 param pythonVersion string = '3.11'
 
-@description('Functions runtime version')
-param functionsRuntimeVersion string = '~4'
+@description('Maximum instance count for Flex Consumption')
+param maximumInstanceCount int = 100
 
-// Reference existing storage account
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageAccountName
-}
+@description('Instance memory in MB for Flex Consumption')
+@allowed([2048, 4096])
+param instanceMemoryMB int = 2048
 
-// Function App
-resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
+// Flex Consumption Function App with User-Assigned Managed Identity
+resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
   name: name
   location: location
   tags: tags
   kind: 'functionapp,linux'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentityId}': {}
+    }
+  }
   properties: {
     serverFarmId: appServicePlanId
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'Python|${pythonVersion}'
-      pythonVersion: pythonVersion
-      ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+    }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${storageBlobEndpoint}${deploymentContainerName}'
+          authentication: {
+            type: 'UserAssignedIdentity'
+            userAssignedIdentityResourceId: userAssignedIdentityId
+          }
         }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(name)
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: functionsRuntimeVersion
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'python'
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: applicationInsightsConnectionString
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: applicationInsightsInstrumentationKey
-        }
-        // Logging level overrides via App Settings
-        {
-          name: 'AzureFunctionsJobHost__logging__logLevel__default'
-          value: defaultLogLevel
-        }
-        {
-          name: 'AzureFunctionsJobHost__logging__logLevel__Host.Results'
-          value: hostResultsLogLevel
-        }
-        {
-          name: 'AzureFunctionsJobHost__logging__logLevel__Host.Aggregator'
-          value: hostAggregatorLogLevel
-        }
-        {
-          name: 'AzureFunctionsJobHost__logging__logLevel__Function'
-          value: functionLogLevel
-        }
-        // Sampling configuration
-        {
-          name: 'AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__isEnabled'
-          value: string(enableSampling)
-        }
-        {
-          name: 'AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__maxTelemetryItemsPerSecond'
-          value: string(maxTelemetryItemsPerSecond)
-        }
-        {
-          name: 'AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__excludedTypes'
-          value: samplingExcludedTypes
-        }
-        // Dependency tracking
-        {
-          name: 'AzureFunctionsJobHost__logging__applicationInsights__enableDependencyTracking'
-          value: string(enableDependencyTracking)
-        }
-        // Scale controller logs
-        {
-          name: 'SCALE_CONTROLLER_LOGGING_ENABLED'
-          value: enableScaleControllerLogs ? 'AppInsights:Verbose' : ''
-        }
-        // Enable Python worker logs
-        {
-          name: 'PYTHON_ENABLE_DEBUG_LOGGING'
-          value: defaultLogLevel == 'Debug' || defaultLogLevel == 'Trace' ? '1' : '0'
-        }
-      ]
+      }
+      scaleAndConcurrency: {
+        maximumInstanceCount: maximumInstanceCount
+        instanceMemoryMB: instanceMemoryMB
+      }
+      runtime: {
+        name: 'python'
+        version: pythonVersion
+      }
+    }
+  }
+
+  // App Settings configured as nested resource
+  resource configAppSettings 'config' = {
+    name: 'appsettings'
+    properties: {
+      // Use managed identity for storage access (no keys)
+      AzureWebJobsStorage__accountName: storageAccountName
+      AzureWebJobsStorage__credential: 'managedidentity'
+      AzureWebJobsStorage__clientId: userAssignedIdentityClientId
+      // Application Insights with managed identity
+      APPINSIGHTS_INSTRUMENTATIONKEY: applicationInsightsInstrumentationKey
+      APPLICATIONINSIGHTS_AUTHENTICATION_STRING: 'ClientId=${userAssignedIdentityClientId};Authorization=AAD'
+      // Logging level overrides via App Settings
+      AzureFunctionsJobHost__logging__logLevel__default: defaultLogLevel
+      'AzureFunctionsJobHost__logging__logLevel__Host.Results': hostResultsLogLevel
+      'AzureFunctionsJobHost__logging__logLevel__Host.Aggregator': hostAggregatorLogLevel
+      AzureFunctionsJobHost__logging__logLevel__Function: functionLogLevel
+      // Sampling configuration
+      'AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__isEnabled': string(enableSampling)
+      AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__maxTelemetryItemsPerSecond: string(maxTelemetryItemsPerSecond)
+      AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__excludedTypes: samplingExcludedTypes
+      // Dependency tracking
+      AzureFunctionsJobHost__logging__applicationInsights__enableDependencyTracking: string(enableDependencyTracking)
+      // Scale controller logs
+      SCALE_CONTROLLER_LOGGING_ENABLED: enableScaleControllerLogs ? 'AppInsights:Verbose' : ''
+      // Enable Python worker logs
+      PYTHON_ENABLE_DEBUG_LOGGING: defaultLogLevel == 'Debug' || defaultLogLevel == 'Trace' ? '1' : '0'
     }
   }
 }

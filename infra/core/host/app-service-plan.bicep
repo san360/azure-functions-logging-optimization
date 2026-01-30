@@ -9,17 +9,17 @@ param tags object = {}
 
 @description('SKU configuration')
 param sku object = {
-  name: 'Y1'
-  tier: 'Dynamic'
+  name: 'FC1'
+  tier: 'FlexConsumption'
 }
 
 @description('Kind of the App Service Plan')
 param kind string = 'functionapp'
 
-@description('Is reserved (Linux)')
-param reserved bool = false
+@description('Is reserved (Linux) - Always true for Flex Consumption')
+param reserved bool = true
 
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: name
   location: location
   tags: tags

@@ -10,7 +10,16 @@ Azure Functions integrates with Application Insights for monitoring, which can g
 - **Sampling configuration** to reduce data volume
 - **Infrastructure as Code** using Azure Developer CLI (azd) and Bicep
 - **Test endpoints** to observe logging behavior
+- **Flex Consumption plan** with managed identity (no storage keys)
 - **Documentation** on optimization strategies
+
+## 🏗️ Architecture
+
+This project uses **Azure Functions Flex Consumption plan** which provides:
+- Serverless scaling with pay-per-use billing
+- **User-assigned managed identity** for secure storage access (no shared keys)
+- Blob-based deployment packages
+- Better cold start performance
 
 ## 📋 Prerequisites
 
@@ -80,13 +89,16 @@ Azure Functions integrates with Application Insights for monitoring, which can g
 │   ├── main.parameters.json
 │   └── core/
 │       ├── host/
-│       │   ├── app-service-plan.bicep
-│       │   └── function-app.bicep
+│       │   ├── app-service-plan.bicep    # Flex Consumption plan
+│       │   └── function-app.bicep        # Function with managed identity
+│       ├── identity/
+│       │   ├── user-assigned-identity.bicep
+│       │   └── role-assignments.bicep    # RBAC for storage/monitoring
 │       ├── monitor/
 │       │   ├── application-insights.bicep
 │       │   └── log-analytics.bicep
 │       └── storage/
-│           └── storage-account.bicep
+│           └── storage-account.bicep     # No shared key access
 ├── src/                    # Function App source code
 │   ├── function_app.py    # Main functions
 │   ├── host.json          # Logging configuration
