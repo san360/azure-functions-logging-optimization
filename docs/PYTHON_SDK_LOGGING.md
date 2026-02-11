@@ -48,6 +48,37 @@ This means:
 
 There is **no** `host.json` key that maps to individual Python loggers. You can only filter at the `Function.<name>.User` level, which is too coarse — it would suppress your own application logs along with the SDK noise.
 
+### Why `applicationInsights.samplingSettings` Cannot Fix This Either
+
+You might consider tuning the [sampling settings](https://learn.microsoft.com/en-us/azure/azure-functions/configure-monitoring?tabs=v2#configure-sampling) in `host.json`:
+
+```json
+"applicationInsights": {
+  "samplingSettings": {
+    "isEnabled": true,
+    "maxTelemetryItemsPerSecond": 5,
+    "excludedTypes": "Request"
+  }
+}
+```
+
+Sampling controls **how much** telemetry Application Insights retains, not **which loggers** produce it. It operates *after* log entries have already been created and sent — randomly keeping or discarding items to stay within the target rate.
+
+This means:
+
+| Sampling approach | Result |
+|---|---|
+| Sampling **on**, high volume | SDK noise and your app logs are both randomly dropped — you lose useful logs along with the noise |
+| Sampling **off** | Everything is kept, including all SDK noise — more cost, more clutter |
+| Very low `maxTelemetryItemsPerSecond` | Suppresses most noise but also loses most of your own application logs |
+
+Sampling cannot distinguish between these two trace entries — both arrive as `Function.<name>.User`:
+
+- `Request URL: 'https://...queue.core.windows.net/...'` (SDK noise)
+- `Successfully processed 50 queue messages` (your app log)
+
+It treats them identically and randomly samples across both.
+
 ## Solution: Python-Side Logger Configuration
 
 Add the following to the top of your `function_app.py` (after imports):
@@ -116,6 +147,7 @@ logging.getLogger("azure").setLevel(logging.WARNING)
 |---|---|---|
 | `host.json` `logLevel` | .NET host categories | Host-side loggers (`Host.Results`, `Microsoft.*`, .NET `Azure.Core`) |
 | `host.json` `Function.<name>.User` | All user logs from a function | Too coarse — suppresses your custom logs too |
+| `host.json` `samplingSettings` | All telemetry volume | Randomly reduces volume — cannot distinguish SDK noise from app logs |
 | Python `logging.getLogger().setLevel()` | Individual Python loggers | Azure SDK loggers (`azure.core.*`, `azure.identity`) |
 
 **Python `logging.getLogger().setLevel()` is the only mechanism that can selectively suppress Azure SDK HTTP logs without affecting your own application logs.**
