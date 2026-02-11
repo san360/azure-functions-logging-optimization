@@ -174,6 +174,8 @@ curl https://func-funclogging.azurewebsites.net/api/queuestatus
 
 ### Log Levels
 
+See [Configure log levels](https://learn.microsoft.com/azure/azure-functions/configure-monitoring?tabs=v2#configure-log-levels) for the full reference.
+
 | Level | Value | Description |
 |-------|-------|-------------|
 | Trace | 0 | Most detailed (may contain sensitive data) |
@@ -186,12 +188,14 @@ curl https://func-funclogging.azurewebsites.net/api/queuestatus
 
 ### Sampling Configuration
 
+See [Application Insights sampling in Azure Functions](https://learn.microsoft.com/azure/azure-functions/configure-monitoring?tabs=v2#configure-sampling) for full details.
+
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `isEnabled` | Enable/disable sampling | `true` |
-| `maxTelemetryItemsPerSecond` | Max traces per second | `5` |
-| `excludedTypes` | Types to never sample | `Request;Exception` |
-| `includedTypes` | Types to always sample | `""` |
+| `maxTelemetryItemsPerSecond` | Target number of telemetry items logged per second on each server host | `20` |
+| `excludedTypes` | Semi-colon delimited list of types to never sample. Recognized types: `Dependency`, `Event`, `Exception`, `PageView`, `Request`, `Trace` | `null` |
+| `includedTypes` | Semi-colon delimited list of types to always sample; all other types are always sampled | `null` |
 
 ## 📊 Observing Sampling in Application Insights
 
@@ -258,6 +262,8 @@ With `maxTelemetryItemsPerSecond: 5`:
 
 ### 3. Runtime Override (No Redeployment)
 
+You can [override host.json values](https://learn.microsoft.com/azure/azure-functions/functions-host-json#override-hostjson-values) using app settings:
+
 ```bash
 # Override log level via app settings
 az functionapp config appsettings set \
@@ -269,8 +275,8 @@ az functionapp config appsettings set \
 ## 🔐 Security Features
 
 - **No Storage Keys** - `allowSharedKeyAccess: false` on storage account
-- **User-Assigned Managed Identity** - For all Azure resource access
-- **RBAC Permissions**:
+- **[User-Assigned Managed Identity](https://learn.microsoft.com/azure/app-service/overview-managed-identity)** - For all Azure resource access
+- **[RBAC Permissions](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)**:
   - Storage Blob Data Owner
   - Storage Blob Data Contributor  
   - Storage Queue Data Contributor
@@ -283,7 +289,7 @@ az functionapp config appsettings set \
 2. **Increase Log Level** - Use `Warning` or `Error` in production
 3. **Disable Dependency Tracking** - If not analyzing external calls
 4. **Filter Azure SDK Logs** - Set `Azure.Core` and `Azure.Storage` to `Warning`
-5. **Set Daily Cap** - Configure in Log Analytics workspace
+5. **[Set Daily Cap](https://learn.microsoft.com/azure/azure-monitor/logs/daily-cap)** - Configure in Log Analytics workspace
 
 ## 🧹 Cleanup
 
@@ -297,18 +303,18 @@ azd down --force --purge
 - [Configure monitoring for Azure Functions](https://learn.microsoft.com/azure/azure-functions/configure-monitoring)
 - [Application Insights sampling](https://learn.microsoft.com/azure/azure-monitor/app/sampling)
 - [Azure Functions Flex Consumption plan](https://learn.microsoft.com/azure/azure-functions/flex-consumption-plan)
-- [Managed identities for Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-identity-access-azure-sql-with-managed-identity)
+- [Managed identities for App Service and Azure Functions](https://learn.microsoft.com/azure/app-service/overview-managed-identity)
 
 ## 📄 License
 
 MIT
-- [Application Insights sampling](https://learn.microsoft.com/azure/azure-monitor/app/sampling)
-- [host.json reference](https://learn.microsoft.com/azure/azure-functions/functions-host-json)
+
+## 🔗 Additional References
+
+- [Application Insights sampling](https://learn.microsoft.com/azure/azure-monitor/app/sampling-classic-api)
+- [host.json reference for Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-host-json)
 - [Azure Functions Python developer guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-python)
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
+- [Azure Functions runtime override via app settings](https://learn.microsoft.com/azure/azure-functions/functions-host-json#override-hostjson-values)
 
 ## 🤝 Contributing
 

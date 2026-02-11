@@ -99,6 +99,9 @@ curl -s -X DELETE "https://func-funclogging.azurewebsites.net/api/queueclear"
 
 ## 📊 KQL Queries for Application Insights
 
+> For KQL syntax reference, see [Kusto Query Language overview](https://learn.microsoft.com/azure/data-explorer/kusto/query/).
+> For Application Insights table schemas, see [Application Insights telemetry data model](https://learn.microsoft.com/azure/azure-monitor/app/data-model-complete).
+
 ### Basic Trace Queries
 
 ```kusto
@@ -277,6 +280,8 @@ traces
 
 ## 📈 Sampling Behavior
 
+> See [Configure sampling](https://learn.microsoft.com/azure/azure-functions/configure-monitoring?tabs=v2#configure-sampling) in the Azure Functions monitoring docs.
+
 ### Current Configuration (host.json)
 
 ```json
@@ -321,7 +326,7 @@ traces
 
 ## 🛠️ Local Development Testing
 
-For local development, use `http://localhost:7071/api` instead:
+For local development, use `http://localhost:7071/api` instead. See [Code and test Azure Functions locally](https://learn.microsoft.com/azure/azure-functions/functions-develop-local) for setup details.
 
 ```bash
 # Start function locally

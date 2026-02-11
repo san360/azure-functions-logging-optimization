@@ -15,7 +15,7 @@ These logs show up in the `traces` table under the category **`Function.<FUNCTIO
 
 ### Architecture: Two Separate Processes
 
-Azure Functions for Python runs as two processes:
+Azure Functions for Python runs as [two separate processes](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-python?pivots=python-mode-v2#understanding-the-worker-process):
 
 ```
 ┌────────────────────────────────┐     ┌─────────────────────────────────┐
@@ -103,7 +103,8 @@ logging.getLogger("azure").setLevel(logging.WARNING)
 
 3. **[Azure SDK for Python — Logging](https://learn.microsoft.com/en-us/azure/developer/python/sdk/azure-sdk-logging)**
 
-   - Documents the Azure SDK's use of Python's standard `logging` module and the specific logger names (`azure.core`, `azure.identity`, etc.).
+   - Documents the Azure SDK's use of Python's standard `logging` module. Logger names follow the pattern `logging.getLogger(__name__)` within each SDK module.
+   - Specific logger names like `azure.core`, `azure.identity`, and `azure.storage` can be found by browsing the [Azure SDK for Python source code](https://github.com/Azure/azure-sdk-for-python).
 
 4. **[Azure Core Pipeline — HTTP Logging Policy](https://learn.microsoft.com/en-us/python/api/azure-core/azure.core.pipeline.policies.httploggingpolicy)**
 
