@@ -14,11 +14,9 @@ import os
 import uuid
 from azure.storage.queue import QueueClient
 from azure.identity import DefaultAzureCredential
+from log_setup import setup_logging
 
-# Suppress verbose Azure SDK HTTP request/response logging
-logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
-logging.getLogger("azure.identity").setLevel(logging.WARNING)
-logging.getLogger("azure.storage").setLevel(logging.WARNING)
+logger = setup_logging()
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -61,21 +59,21 @@ def http_get(req: func.HttpRequest) -> func.HttpResponse:
     log_level = req.params.get("loglevel", "info").lower()
     
     # Demonstrate different log levels
-    logging.debug(f"DEBUG: Processing GET request with name={name}")
-    logging.info(f"INFO: HTTP GET triggered - Greeting {name}")
-    logging.warning(f"WARNING: Example warning message for {name}")
-    
+    logger.debug(f"Processing GET request with name={name}")
+    logger.info(f"HTTP GET triggered - Greeting {name}")
+    logger.warning(f"Example warning message for {name}")
+
     # Log at the requested level
     if log_level == "trace":
-        logging.log(5, f"TRACE: Very detailed trace log for {name}")  # Below DEBUG
+        logger.log(5, f"Very detailed trace log for {name}")  # Below DEBUG
     elif log_level == "debug":
-        logging.debug(f"DEBUG: Detailed debug information for {name}")
+        logger.debug(f"Detailed debug information for {name}")
     elif log_level == "warning":
-        logging.warning(f"WARNING: Warning level log for {name}")
+        logger.warning(f"Warning level log for {name}")
     elif log_level == "error":
-        logging.error(f"ERROR: Error level log for {name}")
+        logger.error(f"Error level log for {name}")
     else:
-        logging.info(f"INFO: Standard info log for {name}")
+        logger.info(f"Standard info log for {name}")
     
     return func.HttpResponse(f"Hello, {name}! Check Application Insights for logs.")
 
@@ -98,14 +96,14 @@ def http_post(req: func.HttpRequest) -> func.HttpResponse:
         generate_logs = req_body.get("generateLogs", 1)
         simulate_error = req_body.get("simulateError", False)
         
-        logging.info(f"Processing POST request for {name}")
+        logger.info(f"Processing POST request for {name}")
         
         # Generate multiple log entries if requested
         for i in range(min(generate_logs, 100)):  # Cap at 100
-            logging.info(f"Log entry {i+1}/{generate_logs} for {name}")
+            logger.info(f"Log entry {i+1}/{generate_logs} for {name}")
             
         if simulate_error:
-            logging.error(f"Simulated error for testing - User: {name}")
+            logger.error(f"Simulated error for testing - User: {name}")
             raise ValueError("Simulated error for testing error tracking")
         
         return func.HttpResponse(
@@ -117,14 +115,14 @@ def http_post(req: func.HttpRequest) -> func.HttpResponse:
         )
         
     except ValueError as e:
-        logging.exception(f"ValueError occurred: {str(e)}")
+        logger.exception(f"ValueError occurred: {str(e)}")
         return func.HttpResponse(
             json.dumps({"error": str(e)}),
             status_code=400,
             mimetype="application/json"
         )
     except Exception as e:
-        logging.exception(f"Unexpected error: {str(e)}")
+        logger.exception(f"Unexpected error: {str(e)}")
         return func.HttpResponse(
             json.dumps({"error": "Internal server error"}),
             status_code=500,
@@ -153,7 +151,7 @@ def logging_demo(req: func.HttpRequest) -> func.HttpResponse:
     
     for level, name, description in levels:
         msg = f"{name}: {description}"
-        logging.log(level, msg)
+        logger.log(level, msg)
         results.append({
             "level": name,
             "logged": True,
@@ -188,7 +186,7 @@ def performance_test(req: func.HttpRequest) -> func.HttpResponse:
     
     start_time = time.time()
     
-    logging.info(f"Starting performance test with {iterations} iterations")
+    logger.info(f"Starting performance test with {iterations} iterations")
     
     for i in range(iterations):
         # Simulate some work
@@ -196,11 +194,11 @@ def performance_test(req: func.HttpRequest) -> func.HttpResponse:
         
         # Log periodically based on frequency
         if (i + 1) % log_frequency == 0:
-            logging.info(f"Performance test progress: {i+1}/{iterations}")
+            logger.info(f"Performance test progress: {i+1}/{iterations}")
     
     elapsed_time = time.time() - start_time
     
-    logging.info(f"Performance test completed in {elapsed_time:.2f} seconds")
+    logger.info(f"Performance test completed in {elapsed_time:.2f} seconds")
     
     return func.HttpResponse(
         json.dumps({
@@ -227,13 +225,13 @@ def sampling_test(req: func.HttpRequest) -> func.HttpResponse:
     """
     count = min(int(req.params.get("count", "50")), 500)
     
-    logging.info(f"Starting sampling test - generating {count} log entries")
-    
+    logger.info(f"Starting sampling test - generating {count} log entries")
+
     for i in range(count):
         # Generate logs with unique identifiers to track sampling
-        logging.info(f"Sampling test entry {i+1:04d}/{count:04d} - ID: {random.randint(10000, 99999)}")
-    
-    logging.info(f"Sampling test completed - {count} entries logged")
+        logger.info(f"Sampling test entry {i+1:04d}/{count:04d} - ID: {random.randint(10000, 99999)}")
+
+    logger.info(f"Sampling test completed - {count} entries logged")
     
     return func.HttpResponse(
         json.dumps({
@@ -251,7 +249,7 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
     Simple health check endpoint with minimal logging.
     """
     # Only log at debug level to reduce noise
-    logging.debug("Health check called")
+    logger.debug("Health check called")
     
     return func.HttpResponse(
         json.dumps({"status": "healthy", "timestamp": time.time()}),
@@ -287,7 +285,7 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
     """
     correlation_id = str(uuid.uuid4())[:8]
     
-    logging.info(f"[{correlation_id}] Queue message endpoint triggered")
+    logger.info(f"[{correlation_id}] Queue message endpoint triggered")
     
     try:
         # Parse request body
@@ -300,8 +298,8 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
         count = min(int(req_body.get("count", 1)), 100)  # Cap at 100
         include_metadata = req_body.get("includeMetadata", True)
         
-        logging.info(f"[{correlation_id}] Preparing to send {count} message(s) to queue '{QUEUE_NAME}'")
-        logging.debug(f"[{correlation_id}] Storage account: {STORAGE_ACCOUNT_NAME}")
+        logger.info(f"[{correlation_id}] Preparing to send {count} message(s) to queue '{QUEUE_NAME}'")
+        logger.debug(f"[{correlation_id}] Storage account: {STORAGE_ACCOUNT_NAME}")
         
         # Get queue client with managed identity
         queue_client = get_queue_client()
@@ -309,10 +307,10 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
         # Create queue if it doesn't exist
         try:
             queue_client.create_queue()
-            logging.info(f"[{correlation_id}] Queue '{QUEUE_NAME}' created or already exists")
+            logger.info(f"[{correlation_id}] Queue '{QUEUE_NAME}' created or already exists")
         except Exception as e:
             # Queue might already exist, which is fine
-            logging.debug(f"[{correlation_id}] Queue creation note: {str(e)}")
+            logger.debug(f"[{correlation_id}] Queue creation note: {str(e)}")
         
         # Send messages
         sent_messages = []
@@ -336,7 +334,7 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
             message_json = json.dumps(payload)
             
             # Send message to queue
-            logging.debug(f"[{correlation_id}] Sending message {i+1}/{count}")
+            logger.debug(f"[{correlation_id}] Sending message {i+1}/{count}")
             response = queue_client.send_message(message_json)
             
             sent_messages.append({
@@ -347,11 +345,11 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
             
             # Log at different intervals for sampling demonstration
             if (i + 1) % 10 == 0:
-                logging.info(f"[{correlation_id}] Progress: {i+1}/{count} messages sent")
+                logger.info(f"[{correlation_id}] Progress: {i+1}/{count} messages sent")
         
         elapsed_time = time.time() - start_time
         
-        logging.info(f"[{correlation_id}] Successfully sent {count} messages in {elapsed_time:.3f}s")
+        logger.info(f"[{correlation_id}] Successfully sent {count} messages in {elapsed_time:.3f}s")
         
         # Return summary
         return func.HttpResponse(
@@ -369,8 +367,8 @@ def queue_message(req: func.HttpRequest) -> func.HttpResponse:
         )
         
     except Exception as e:
-        logging.error(f"[{correlation_id}] Error sending queue message: {str(e)}")
-        logging.exception(f"[{correlation_id}] Full exception details")
+        logger.error(f"[{correlation_id}] Error sending queue message: {str(e)}")
+        logger.exception(f"[{correlation_id}] Full exception details")
         
         return func.HttpResponse(
             json.dumps({
@@ -393,7 +391,7 @@ def queue_status(req: func.HttpRequest) -> func.HttpResponse:
     """
     correlation_id = str(uuid.uuid4())[:8]
     
-    logging.info(f"[{correlation_id}] Queue status check requested")
+    logger.info(f"[{correlation_id}] Queue status check requested")
     
     try:
         queue_client = get_queue_client()
@@ -401,7 +399,7 @@ def queue_status(req: func.HttpRequest) -> func.HttpResponse:
         # Get queue properties
         properties = queue_client.get_queue_properties()
         
-        logging.info(f"[{correlation_id}] Queue status retrieved successfully")
+        logger.info(f"[{correlation_id}] Queue status retrieved successfully")
         
         return func.HttpResponse(
             json.dumps({
@@ -416,7 +414,7 @@ def queue_status(req: func.HttpRequest) -> func.HttpResponse:
         )
         
     except Exception as e:
-        logging.error(f"[{correlation_id}] Error getting queue status: {str(e)}")
+        logger.error(f"[{correlation_id}] Error getting queue status: {str(e)}")
         
         return func.HttpResponse(
             json.dumps({
@@ -439,7 +437,7 @@ def queue_clear(req: func.HttpRequest) -> func.HttpResponse:
     """
     correlation_id = str(uuid.uuid4())[:8]
     
-    logging.warning(f"[{correlation_id}] Queue clear requested - this will delete all messages!")
+    logger.warning(f"[{correlation_id}] Queue clear requested - this will delete all messages!")
     
     try:
         queue_client = get_queue_client()
@@ -447,7 +445,7 @@ def queue_clear(req: func.HttpRequest) -> func.HttpResponse:
         # Clear all messages
         queue_client.clear_messages()
         
-        logging.info(f"[{correlation_id}] Queue cleared successfully")
+        logger.info(f"[{correlation_id}] Queue cleared successfully")
         
         return func.HttpResponse(
             json.dumps({
@@ -460,7 +458,7 @@ def queue_clear(req: func.HttpRequest) -> func.HttpResponse:
         )
         
     except Exception as e:
-        logging.error(f"[{correlation_id}] Error clearing queue: {str(e)}")
+        logger.error(f"[{correlation_id}] Error clearing queue: {str(e)}")
         
         return func.HttpResponse(
             json.dumps({
