@@ -3,20 +3,22 @@
   "logging": {
     "fileLoggingMode": "debugOnly",
     "logLevel": {
-      "default": "Warning",
+      "default": "Information",
       "Host.Results": "Information",
       "Host.Aggregator": "Trace",
       "Function": "Information",
       "Function.queue_message": "Information",
       "Function.queue_message.User": "Debug",
       "Azure.Core": "Warning",
-      "Azure.Storage": "Warning"
+      "Azure.Storage": "Warning",
+      "Azure.Identity": "Warning",
+      "Host.Function.Console": "Warning"
     },
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
         "maxTelemetryItemsPerSecond": 5,
-        "excludedTypes": "Request;Exception",
+        "excludedTypes": "Request",
         "includedTypes": ""
       },
       "enableDependencyTracking": true,
@@ -29,6 +31,16 @@
   },
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
-    "version": "[4.*, 5.0.0)"
+    "version": "[4.0.0, 5.0.0)"
+  },
+  "extensions": {
+    "queues": {
+      "maxPollingInterval": "00:00:30",
+      "maxDequeueCount": 1,
+      "visibilityTimeout": "00:01:00",
+      "batchSize": 16,
+      "newBatchThreshold": 8,
+      "messageEncoding": "none"
+    }
   }
 }

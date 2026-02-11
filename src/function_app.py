@@ -15,6 +15,11 @@ import uuid
 from azure.storage.queue import QueueClient
 from azure.identity import DefaultAzureCredential
 
+# Suppress verbose Azure SDK HTTP request/response logging
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("azure.identity").setLevel(logging.WARNING)
+logging.getLogger("azure.storage").setLevel(logging.WARNING)
+
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 # Storage Queue configuration
